@@ -16,12 +16,9 @@ pub const MatrixError = error{
     InvalidType,
 };
 
-pub fn Matrix(comptime T: type) type {
+pub fn Matrix(comptime T: type, allocator: Allocator) type {
     return struct {
         const Self = @This();
-
-        /// Allocator used for memory management.
-        _allocator: Allocator,
 
         /// The elements of the matrix.
         _data: []T,
@@ -39,9 +36,8 @@ pub fn Matrix(comptime T: type) type {
         ///
         /// # Note
         /// Nothing is allocated until the first push.
-        pub fn init(allocator: Allocator) Self {
+        pub fn init() Self {
             return Self{
-                ._allocator = allocator,
                 ._data = undefined,
                 ._nrows = 0,
                 ._ncols = 0,
@@ -50,15 +46,14 @@ pub fn Matrix(comptime T: type) type {
         }
 
         /// Creates a new, empty matrix with memory reserved for `nrows * ncols` elements.
-        pub fn initWithCapacity(allocator: Allocator, nrows: usize, ncols: usize) !Self {
+        pub fn initWithCapacity(nrows: usize, ncols: usize) !Self {
             if ((nrows == 0) or (ncols == 0)) {
-                return Self.init(allocator);
+                return Self.init();
             }
 
             const data = try allocator.alloc(T, nrows * ncols);
 
             return Self{
-                ._allocator = allocator,
                 ._data = data,
                 ._nrows = nrows,
                 ._ncols = ncols,
@@ -70,7 +65,7 @@ pub fn Matrix(comptime T: type) type {
         ///
         /// # Note
         /// The slice must have `nrows * ncols` elements, and the number of rows and columns must be at least 1.
-        pub fn initFromSlice(allocator: Allocator, nrows: usize, ncols: usize, slice: []const T) !Self {
+        pub fn initFromSlice(nrows: usize, ncols: usize, slice: []const T) !Self {
             // Input validation
             {
                 if ((nrows == 0) or (ncols == 0)) {
@@ -82,7 +77,7 @@ pub fn Matrix(comptime T: type) type {
                 }
             }
 
-            var out = try Self.initWithCapacity(allocator, nrows, ncols);
+            var out = try Self.initWithCapacity(nrows, ncols);
             out._nrows = nrows;
             out._ncols = ncols;
             for (0..nrows) |i| {
@@ -94,24 +89,24 @@ pub fn Matrix(comptime T: type) type {
         }
 
         /// Creates a new matrix of the specified size, with all elements set to `value`.
-        pub fn initWithValue(allocator: Allocator, comptime nrows: usize, comptime ncols: usize, value: T) !Self {
+        pub fn initWithValue(comptime nrows: usize, comptime ncols: usize, value: T) !Self {
             if ((nrows == 0) or (ncols == 0)) {
-                return Self.init(allocator);
+                return Self.init();
             }
 
             var data: [nrows * ncols]T = undefined;
             @memset(&data, value);
-            return Self.initFromSlice(allocator, nrows, ncols, &data);
+            return Self.initFromSlice(nrows, ncols, &data);
         }
 
-        pub fn identity(allocator: Allocator, comptime size: usize) !Self {
+        pub fn identity(comptime size: usize) !Self {
             if (isNumber(T) == false) {
                 return MatrixError.InvalidType;
             }
 
             var data: [size * size]T = undefined;
             @memset(&data, 0);
-            var out = try Self.initFromSlice(allocator, size, size, &data);
+            var out = try Self.initFromSlice(size, size, &data);
             for (0..size) |i| {
                 for (0..size) |j| {
                     if (i == j) {
@@ -125,7 +120,7 @@ pub fn Matrix(comptime T: type) type {
         /// Frees the memory used by the matrix.
         pub fn deinit(self: *Self) void {
             if (self._capacity > 0) {
-                self._allocator.free(self._data);
+                allocator.free(self._data);
             }
             self._nrows = 0;
             self._ncols = 0;
@@ -144,10 +139,9 @@ test "Create new Matrix" {
 
     // init
     {
-        var mat = Matrix(i8).init(allocator);
+        var mat = Matrix(i8, allocator).init();
         defer mat.deinit();
 
-        try testing.expectEqual(mat._allocator, allocator);
         try testing.expectEqual(mat._nrows, 0);
         try testing.expectEqual(mat._ncols, 0);
         try testing.expectEqual(mat._capacity, 0);
@@ -155,10 +149,9 @@ test "Create new Matrix" {
 
     // initWithCapacity
     {
-        var mat = try Matrix(i8).initWithCapacity(allocator, 2, 3);
+        var mat = try Matrix(i8, allocator).initWithCapacity(2, 3);
         defer mat.deinit();
 
-        try testing.expectEqual(mat._allocator, allocator);
         try testing.expectEqual(mat._nrows, 2);
         try testing.expectEqual(mat._ncols, 3);
         try testing.expectEqual(mat._capacity, 6);
@@ -167,10 +160,9 @@ test "Create new Matrix" {
     // initFromSlice
     {
         var slice = [_]i8{ 1, 2, 3, 4, 5, 6 };
-        var mat = try Matrix(i8).initFromSlice(allocator, 2, 3, &slice);
+        var mat = try Matrix(i8, allocator).initFromSlice(2, 3, &slice);
         defer mat.deinit();
 
-        try testing.expectEqual(mat._allocator, allocator);
         try testing.expectEqual(mat._nrows, 2);
         try testing.expectEqual(mat._ncols, 3);
         try testing.expectEqual(mat._capacity, 6);
@@ -181,10 +173,9 @@ test "Create new Matrix" {
 
     // initWithValue
     {
-        var mat = try Matrix(i8).initWithValue(allocator, 2, 3, 5);
+        var mat = try Matrix(i8, allocator).initWithValue(2, 3, 5);
         defer mat.deinit();
 
-        try testing.expectEqual(mat._allocator, allocator);
         try testing.expectEqual(mat._nrows, 2);
         try testing.expectEqual(mat._ncols, 3);
         try testing.expectEqual(mat._capacity, 6);
@@ -195,10 +186,9 @@ test "Create new Matrix" {
 
     // identity
     {
-        var mat = try Matrix(i8).identity(allocator, 2);
+        var mat = try Matrix(i8, allocator).identity(2);
         defer mat.deinit();
 
-        try testing.expectEqual(mat._allocator, allocator);
         try testing.expectEqual(mat._nrows, 2);
         try testing.expectEqual(mat._ncols, 2);
         try testing.expectEqual(mat._capacity, 4);

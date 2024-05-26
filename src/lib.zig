@@ -153,6 +153,14 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         fn arrayIdx(self: *const Self, row: usize, col: usize) usize {
             return self._ncols * row + col;
         }
+
+        pub fn index(self: *const Self, comptime row: usize, comptime col: usize) *const T {
+            _ = col; // autofix
+            _ = row; // autofix
+            _ = self; // autofix
+
+            // TODO: Implement!!!
+        }
     };
 }
 

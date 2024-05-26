@@ -46,10 +46,10 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         }
 
         /// Creates a new, empty matrix with memory reserved for `nrows * ncols` elements.
-        pub fn initWithCapacity(nrows: usize, ncols: usize) !Self {
-            if ((nrows == 0) or (ncols == 0)) {
+        pub fn initWithCapacity(comptime nrows: usize, comptime ncols: usize) !Self {
+            comptime if ((nrows == 0) or (ncols == 0)) {
                 return Self.init();
-            }
+            };
 
             const data = try allocator.alloc(T, nrows * ncols);
 
@@ -65,12 +65,12 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         ///
         /// # Note
         /// The slice must have `nrows * ncols` elements, and the number of rows and columns must be at least 1.
-        pub fn initFromSlice(nrows: usize, ncols: usize, slice: []const T) !Self {
+        pub fn initFromSlice(comptime nrows: usize, comptime ncols: usize, slice: []const T) !Self {
             // Input validation
             {
-                if ((nrows == 0) or (ncols == 0)) {
+                comptime if ((nrows == 0) or (ncols == 0)) {
                     return MatrixError.InvalidSize;
-                }
+                };
 
                 if (slice.len != nrows * ncols) {
                     return MatrixError.InvalidSlice;
@@ -154,17 +154,37 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return self._ncols * row + col;
         }
 
-        pub fn index(self: *const Self, comptime row: usize, comptime col: usize) *const T {
-            _ = col; // autofix
-            _ = row; // autofix
-            _ = self; // autofix
+        /// Returns the vaule at the specified index of the matrix.
+        pub fn get(self: *const Self, row: usize, col: usize) T {
+            // Input validation
+            {
+                if (row >= self._nrows) {
+                    @panic("InvaidIndex: The row index must be less than the number of rows in the matrix");
+                } else if (col >= self._ncols) {
+                    @panic("InvaidIndex: The column index must be less than the number of colunns in the matrix");
+                }
+            }
 
-            // TODO: Implement!!!
+            return self._data[self.arrayIdx(row, col)];
+        }
+
+        /// Returns a pointer to the specified index of the matrix.
+        pub fn getPtr(self: *const Self, row: usize, col: usize) *T {
+            // Input validation
+            {
+                if (row >= self._nrows) {
+                    @panic("InvaidIndex: The row index must be less than the number of rows in the matrix");
+                } else if (col >= self._ncols) {
+                    @panic("InvaidIndex: The column index must be less than the number of colunns in the matrix");
+                }
+            }
+
+            return @ptrCast(self._data[self.arrayIdx(row, col)..]);
         }
     };
 }
 
-test "Create new Matrix" {
+test "Create new matrix" {
     const allocator = testing.allocator;
 
     // init
@@ -258,4 +278,22 @@ test "Create new Matrix" {
             try testing.expectEqual(value, 1);
         }
     }
+}
+
+test "Index matrix" {
+    const allocator = testing.allocator;
+
+    var slice = [_]i8{ 1, 2, 3, 4, 5, 6 };
+    var mat = try Matrix(i8, allocator).initFromSlice(2, 3, &slice);
+    defer mat.deinit();
+
+    const x = mat.getPtr(0, 0);
+    x.* = 99;
+
+    try testing.expectEqual(mat.get(0, 0), 99);
+    try testing.expectEqual(mat.get(0, 1), 2);
+    try testing.expectEqual(mat.get(0, 2), 3);
+    try testing.expectEqual(mat.get(1, 0), 4);
+    try testing.expectEqual(mat.get(1, 1), 5);
+    try testing.expectEqual(mat.get(1, 2), 6);
 }

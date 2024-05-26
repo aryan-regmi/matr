@@ -99,7 +99,9 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return Self.initFromSlice(nrows, ncols, &data);
         }
 
+        /// Creates an identity matrix of the specified size.
         pub fn identity(comptime size: usize) !Self {
+            // Input validation
             comptime if (isNumber(T) == false) {
                 @compileError("Invalid type: The type must be numerical to create an `identity` matrix");
             };
@@ -115,6 +117,26 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 }
             }
             return out;
+        }
+
+        /// Creates a matrix of the specified size, filled with 0.
+        pub fn zeros(comptime nrows: usize, comptime ncols: usize) !Self {
+            // Input validation
+            comptime if (isNumber(T) == false) {
+                @compileError("Invalid type: The type must be numerical to create a `zeros` matrix");
+            };
+
+            return Self.initWithValue(nrows, ncols, 0);
+        }
+
+        /// Creates a matrix of the specified size, filled with 1.
+        pub fn ones(comptime nrows: usize, comptime ncols: usize) !Self {
+            // Input validation
+            comptime if (isNumber(T) == false) {
+                @compileError("Invalid type: The type must be numerical to create a `ones` matrix");
+            };
+
+            return Self.initWithValue(nrows, ncols, 1);
         }
 
         /// Frees the memory used by the matrix.
@@ -200,6 +222,32 @@ test "Create new Matrix" {
                     try testing.expectEqual(mat._data[mat.arrayIdx(i, j)], 0);
                 }
             }
+        }
+    }
+
+    // zeros
+    {
+        var mat = try Matrix(i8, allocator).zeros(2, 3);
+        defer mat.deinit();
+
+        try testing.expectEqual(mat._nrows, 2);
+        try testing.expectEqual(mat._ncols, 3);
+        try testing.expectEqual(mat._capacity, 6);
+        for (mat._data) |value| {
+            try testing.expectEqual(value, 0);
+        }
+    }
+
+    // ones
+    {
+        var mat = try Matrix(i8, allocator).ones(2, 3);
+        defer mat.deinit();
+
+        try testing.expectEqual(mat._nrows, 2);
+        try testing.expectEqual(mat._ncols, 3);
+        try testing.expectEqual(mat._capacity, 6);
+        for (mat._data) |value| {
+            try testing.expectEqual(value, 1);
         }
     }
 }

@@ -2,6 +2,11 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 
+const MatrixError = error{
+    InvalidSize,
+    InvalidSlice,
+};
+
 fn Matrix(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -25,7 +30,7 @@ fn Matrix(comptime T: type) type {
         ///
         /// # Note
         /// Nothing is allocated until the first push.
-        fn init(allocator: Allocator) Self {
+        pub fn init(allocator: Allocator) Self {
             return Self{
                 ._allocator = allocator,
                 ._data = undefined,
@@ -36,7 +41,7 @@ fn Matrix(comptime T: type) type {
         }
 
         /// Creates a new, empty matrix with memory reserved for `nrows * ncols` elements.
-        fn initWithCapacity(allocator: Allocator, nrows: usize, ncols: usize) !Self {
+        pub fn initWithCapacity(allocator: Allocator, nrows: usize, ncols: usize) !Self {
             const data = try allocator.alloc(T, nrows * ncols);
 
             return Self{
@@ -48,14 +53,42 @@ fn Matrix(comptime T: type) type {
             };
         }
 
+        pub fn initFromSlice(allocator: Allocator, nrows: usize, ncols: usize, slice: []const T) !Self {
+            // Input validation
+            {
+                if ((nrows == 0) or (ncols == 0)) {
+                    return MatrixError.InvalidSize;
+                }
+
+                if (slice.len != nrows * ncols) {
+                    return MatrixError.InvalidSlice;
+                }
+            }
+
+            var out = try Matrix(T).initWithCapacity(allocator, nrows, ncols);
+            out._nrows = nrows;
+            out._ncols = ncols;
+            for (0..nrows) |i| {
+                for (0..ncols) |j| {
+                    out._data[out.arrayIdx(i, j)] = slice[out.arrayIdx(i, j)];
+                }
+            }
+            return out;
+        }
+
         /// Frees the memory used by the matrix.
-        fn deinit(self: *Self) void {
+        pub fn deinit(self: *Self) void {
             if (self._capacity > 0) {
                 self._allocator.free(self._data);
             }
             self._nrows = 0;
             self._ncols = 0;
             self._capacity = 0;
+        }
+
+        /// Gets the array index given a matrix index.
+        fn arrayIdx(self: *const Self, row: usize, col: usize) usize {
+            return self._ncols * row + col;
         }
     };
 }
@@ -83,5 +116,20 @@ test "Create new Matrix" {
         try testing.expectEqual(mat._nrows, 2);
         try testing.expectEqual(mat._ncols, 3);
         try testing.expectEqual(mat._capacity, 6);
+    }
+
+    // Add initFromSlice
+    {
+        var slice = [_]i8{ 1, 2, 3, 4, 5, 6 };
+        var mat = try Matrix(i8).initFromSlice(allocator, 2, 3, &slice);
+        defer mat.deinit();
+
+        try testing.expectEqual(mat._allocator, allocator);
+        try testing.expectEqual(mat._nrows, 2);
+        try testing.expectEqual(mat._ncols, 3);
+        try testing.expectEqual(mat._capacity, 6);
+        for (mat._data, 0..) |value, i| {
+            try testing.expectEqual(value, slice[i]);
+        }
     }
 }

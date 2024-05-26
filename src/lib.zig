@@ -100,9 +100,9 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         }
 
         pub fn identity(comptime size: usize) !Self {
-            if (isNumber(T) == false) {
-                return MatrixError.InvalidType;
-            }
+            comptime if (isNumber(T) == false) {
+                @compileError("Invalid type: The type must be numerical to create an `identity` matrix");
+            };
 
             var data: [size * size]T = undefined;
             @memset(&data, 0);

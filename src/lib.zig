@@ -2,9 +2,18 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 
+/// Checks if a type is a number.
+fn isNumber(comptime T: type) bool {
+    switch (@typeInfo(T)) {
+        .Int, .Float, .ComptimeInt, .ComptimeFloat => return true,
+        else => return false,
+    }
+}
+
 pub const MatrixError = error{
     InvalidSize,
     InvalidSlice,
+    InvalidType,
 };
 
 pub fn Matrix(comptime T: type) type {
@@ -95,6 +104,24 @@ pub fn Matrix(comptime T: type) type {
             return Self.initFromSlice(allocator, nrows, ncols, &data);
         }
 
+        pub fn identity(allocator: Allocator, comptime size: usize) !Self {
+            if (isNumber(T) == false) {
+                return MatrixError.InvalidType;
+            }
+
+            var data: [size * size]T = undefined;
+            @memset(&data, 0);
+            var out = try Self.initFromSlice(allocator, size, size, &data);
+            for (0..size) |i| {
+                for (0..size) |j| {
+                    if (i == j) {
+                        out._data[out.arrayIdx(i, j)] = 1;
+                    }
+                }
+            }
+            return out;
+        }
+
         /// Frees the memory used by the matrix.
         pub fn deinit(self: *Self) void {
             if (self._capacity > 0) {
@@ -152,7 +179,7 @@ test "Create new Matrix" {
         }
     }
 
-    // TODO: initWithValue
+    // initWithValue
     {
         var mat = try Matrix(i8).initWithValue(allocator, 2, 3, 5);
         defer mat.deinit();
@@ -163,6 +190,26 @@ test "Create new Matrix" {
         try testing.expectEqual(mat._capacity, 6);
         for (mat._data) |value| {
             try testing.expectEqual(value, 5);
+        }
+    }
+
+    // identity
+    {
+        var mat = try Matrix(i8).identity(allocator, 2);
+        defer mat.deinit();
+
+        try testing.expectEqual(mat._allocator, allocator);
+        try testing.expectEqual(mat._nrows, 2);
+        try testing.expectEqual(mat._ncols, 2);
+        try testing.expectEqual(mat._capacity, 4);
+        for (0..2) |i| {
+            for (0..2) |j| {
+                if (i == j) {
+                    try testing.expectEqual(mat._data[mat.arrayIdx(i, j)], 1);
+                } else {
+                    try testing.expectEqual(mat._data[mat.arrayIdx(i, j)], 0);
+                }
+            }
         }
     }
 }

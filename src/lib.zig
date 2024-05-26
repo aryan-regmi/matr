@@ -2,12 +2,12 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 
-const MatrixError = error{
+pub const MatrixError = error{
     InvalidSize,
     InvalidSlice,
 };
 
-fn Matrix(comptime T: type) type {
+pub fn Matrix(comptime T: type) type {
     return struct {
         const Self = @This();
 
@@ -42,6 +42,10 @@ fn Matrix(comptime T: type) type {
 
         /// Creates a new, empty matrix with memory reserved for `nrows * ncols` elements.
         pub fn initWithCapacity(allocator: Allocator, nrows: usize, ncols: usize) !Self {
+            if ((nrows == 0) or (ncols == 0)) {
+                return Self.init(allocator);
+            }
+
             const data = try allocator.alloc(T, nrows * ncols);
 
             return Self{
@@ -53,6 +57,10 @@ fn Matrix(comptime T: type) type {
             };
         }
 
+        /// Creates a new matrix from the given slice.
+        ///
+        /// # Note
+        /// The slice must have `nrows * ncols` elements, and the number of rows and columns must be at least 1.
         pub fn initFromSlice(allocator: Allocator, nrows: usize, ncols: usize, slice: []const T) !Self {
             // Input validation
             {
@@ -65,7 +73,7 @@ fn Matrix(comptime T: type) type {
                 }
             }
 
-            var out = try Matrix(T).initWithCapacity(allocator, nrows, ncols);
+            var out = try Self.initWithCapacity(allocator, nrows, ncols);
             out._nrows = nrows;
             out._ncols = ncols;
             for (0..nrows) |i| {
@@ -74,6 +82,17 @@ fn Matrix(comptime T: type) type {
                 }
             }
             return out;
+        }
+
+        /// Creates a new matrix of the specified size, with all elements set to `value`.
+        pub fn initWithValue(allocator: Allocator, comptime nrows: usize, comptime ncols: usize, value: T) !Self {
+            if ((nrows == 0) or (ncols == 0)) {
+                return Self.init(allocator);
+            }
+
+            var data: [nrows * ncols]T = undefined;
+            @memset(&data, value);
+            return Self.initFromSlice(allocator, nrows, ncols, &data);
         }
 
         /// Frees the memory used by the matrix.
@@ -118,7 +137,7 @@ test "Create new Matrix" {
         try testing.expectEqual(mat._capacity, 6);
     }
 
-    // Add initFromSlice
+    // initFromSlice
     {
         var slice = [_]i8{ 1, 2, 3, 4, 5, 6 };
         var mat = try Matrix(i8).initFromSlice(allocator, 2, 3, &slice);
@@ -130,6 +149,20 @@ test "Create new Matrix" {
         try testing.expectEqual(mat._capacity, 6);
         for (mat._data, 0..) |value, i| {
             try testing.expectEqual(value, slice[i]);
+        }
+    }
+
+    // TODO: initWithValue
+    {
+        var mat = try Matrix(i8).initWithValue(allocator, 2, 3, 5);
+        defer mat.deinit();
+
+        try testing.expectEqual(mat._allocator, allocator);
+        try testing.expectEqual(mat._nrows, 2);
+        try testing.expectEqual(mat._ncols, 3);
+        try testing.expectEqual(mat._capacity, 6);
+        for (mat._data) |value| {
+            try testing.expectEqual(value, 5);
         }
     }
 }

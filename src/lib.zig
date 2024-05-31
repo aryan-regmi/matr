@@ -58,10 +58,10 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         }
 
         /// Creates a new, empty matrix with memory reserved for `nrows * ncols` elements.
-        pub fn initWithCapacity(comptime nrows: usize, comptime ncols: usize) !Self {
-            comptime if ((nrows == 0) or (ncols == 0)) {
+        pub fn initWithCapacity(nrows: usize, ncols: usize) !Self {
+            if ((nrows == 0) or (ncols == 0)) {
                 return Self.init();
-            };
+            }
 
             const data = try allocator.alloc(T, nrows * ncols);
 
@@ -152,13 +152,10 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         }
 
         /// Frees the memory used by the matrix.
-        pub fn deinit(self: *Self) void {
+        pub fn deinit(self: *const Self) void {
             if (self._capacity > 0) {
                 allocator.free(self._data);
             }
-            self._nrows = 0;
-            self._ncols = 0;
-            self._capacity = 0;
         }
 
         /// Gets the array index given a matrix index.
@@ -198,7 +195,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         ///
         /// # Note
         /// If a type is not trivially copyable, a `clone_fn` should be provided to create a clone of the elements in `self`.
-        pub fn getRow(self: *const Self, row: usize, clone_fn: *const fn (T) T) !Self {
+        pub fn getRow(self: *const Self, row: usize, clone_fn: ?*const fn (T) T) !Self {
             // Input validation
             if (row >= self._nrows) {
                 return Error.RowIdxOutOfBounds;
@@ -209,10 +206,12 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             out._ncols = self._ncols;
 
             for (0..self._ncols) |col| {
-                if (clone_fn != .{}) {
-                    out.getPtr(0, col).* = clone_fn(self.get(row, col));
+                if (clone_fn != null) {
+                    const elem_ptr = try out.getPtr(0, col);
+                    elem_ptr.* = clone_fn.?(try self.get(row, col));
                 } else {
-                    out.getPtr(0, col).* = self.get(row, col);
+                    const elem_ptr = try out.getPtr(0, col);
+                    elem_ptr.* = try self.get(row, col);
                 }
             }
 
@@ -222,7 +221,8 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         /// Returns an `ArrayList` containing pointers to the elements of the specified row in the matrix.
         ///
         /// # Note
-        /// The row must be freed by the caller using the same allocator used to initalize the matrix.
+        /// * The returned row must be freed by the caller.
+        /// * The pointers in the `ArrayList` will be invalidated if the underlying matrix is freed before it.
         pub fn getRowPtr(self: *Self, row: usize) !ArrayList(*T) {
             // Input validation
             if (row >= self._nrows) {
@@ -232,12 +232,61 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             var out = try ArrayList(*T).initCapacity(allocator, self._ncols);
 
             for (0..self._ncols) |col| {
-                out.append(self.getPtr(row, col));
+                try out.append(try self.getPtr(row, col));
             }
 
             return out;
         }
 
+        /// Returns a new `Matrix` containing the elements of the specified column from `self`.
+        ///
+        /// # Note
+        /// If a type is not trivially copyable, a `clone_fn` should be provided to create a clone of the elements in `self`.
+        pub fn getCol(self: *const Self, col: usize, clone_fn: ?*const fn (T) T) !Self {
+            // Input validation
+            if (col >= self._ncols) {
+                return Error.ColIdxOutOfBounds;
+            }
+
+            var out = try Self.initWithCapacity(self._nrows, 1);
+            out._ncols = 1;
+            out._nrows = self._nrows;
+
+            for (0..self._nrows) |row| {
+                if (clone_fn != null) {
+                    const elem_ptr = try out.getPtr(row, col);
+                    elem_ptr.* = clone_fn.?(try self.get(row, col));
+                } else {
+                    const elem_ptr = try out.getPtr(row, col);
+                    elem_ptr.* = try self.get(row, col);
+                }
+            }
+
+            return out;
+        }
+
+        /// Returns an `ArrayList` containing pointers to the elements of the specified column in the matrix.
+        ///
+        /// # Note
+        /// * The returned column must be freed by the caller.
+        /// * The pointers in the `ArrayList` will be invalidated if the underlying matrix is freed before it.
+        pub fn getColPtr(self: *Self, col: usize) !ArrayList(*T) {
+            // Input validation
+            if (col >= self._ncols) {
+                return Error.ColIdxOutOfBounds;
+            }
+
+            var out = try ArrayList(*T).initCapacity(allocator, self._ncols);
+
+            for (0..self._nrows) |row| {
+                try out.append(try self.getPtr(row, col));
+            }
+
+            return out;
+        }
+
+        // TODO: Add `getCol` and `getColPtr`
+        //
         // TODO: Add `pushRow` and `pushCol`
         //
         // TODO: Add math operations (matrix and element-wise)
@@ -359,19 +408,25 @@ test "Index matrix" {
 }
 
 test "Get rows" {
-    // const allocator = testing.allocator;
-    //
-    // var slice = [_]i8{ 1, 2, 3, 4, 5, 6 };
-    // var mat = try Matrix(i8, allocator).initFromSlice(2, 3, &slice);
-    // defer mat.deinit();
-    //
-    // const x = mat.getPtr(0, 0);
-    // x.* = 99;
-    //
-    // try testing.expectEqual(mat.get(0, 0), 99);
-    // try testing.expectEqual(mat.get(0, 1), 2);
-    // try testing.expectEqual(mat.get(0, 2), 3);
-    // try testing.expectEqual(mat.get(1, 0), 4);
-    // try testing.expectEqual(mat.get(1, 1), 5);
-    // try testing.expectEqual(mat.get(1, 2), 6);
+    const allocator = testing.allocator;
+
+    var slice = [_]i8{ 1, 2, 3, 4, 5, 6 };
+    var mat = try Matrix(i8, allocator).initFromSlice(2, 3, &slice);
+    defer mat.deinit();
+
+    const row0 = try mat.getRow(0, null);
+    defer row0.deinit();
+    for (row0._data, 0..) |value, i| {
+        try testing.expectEqual(value, slice[i]);
+    }
+
+    const row0_ptr = try mat.getRowPtr(0);
+    defer row0_ptr.deinit();
+    for (row0_ptr.items, 0..) |value, i| {
+        value.* += 20;
+        try testing.expectEqual(try mat.get(0, i), value.*);
+    }
+    for (row0._data, 0..) |value, i| {
+        try testing.expectEqual(value, slice[i]);
+    }
 }

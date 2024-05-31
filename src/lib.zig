@@ -285,8 +285,6 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return out;
         }
 
-        // TODO: Add `getCol` and `getColPtr`
-        //
         // TODO: Add `pushRow` and `pushCol`
         //
         // TODO: Add math operations (matrix and element-wise)
@@ -428,5 +426,37 @@ test "Get rows" {
     }
     for (row0._data, 0..) |value, i| {
         try testing.expectEqual(value, slice[i]);
+    }
+}
+
+test "Get cols" {
+    const allocator = testing.allocator;
+
+    var slice = [_]i8{ 1, 2, 3, 4, 5, 6 };
+    var mat = try Matrix(i8, allocator).initFromSlice(2, 3, &slice);
+    defer mat.deinit();
+
+    const col0 = try mat.getCol(0, null);
+    defer col0.deinit();
+    for (col0._data, 0..) |value, i| {
+        if (i == 0) {
+            try testing.expectEqual(value, slice[0]);
+        } else {
+            try testing.expectEqual(value, slice[3]);
+        }
+    }
+
+    const col0_ptr = try mat.getColPtr(0);
+    defer col0_ptr.deinit();
+    for (col0_ptr.items, 0..) |value, i| {
+        value.* += 20;
+        try testing.expectEqual(try mat.get(i, 0), value.*);
+    }
+    for (col0._data, 0..) |value, i| {
+        if (i == 0) {
+            try testing.expectEqual(value, slice[0]);
+        } else {
+            try testing.expectEqual(value, slice[3]);
+        }
     }
 }

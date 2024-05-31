@@ -194,10 +194,11 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return @ptrCast(self._data[self.arrayIdx(row, col)..]);
         }
 
-        // NOTE: Add `clone_fn` parameter for types that aren't trivially copyable.
-        //
         /// Returns a new `Matrix` containing the elements of the specified row from `self`.
-        pub fn getRow(self: *const Self, row: usize) !Self {
+        ///
+        /// # Note
+        /// If a type is not trivially copyable, a `clone_fn` should be provided to create a clone of the elements in `self`.
+        pub fn getRow(self: *const Self, row: usize, clone_fn: *const fn (T) T) !Self {
             // Input validation
             if (row >= self._nrows) {
                 return Error.RowIdxOutOfBounds;
@@ -208,7 +209,11 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             out._ncols = self._ncols;
 
             for (0..self._ncols) |col| {
-                out.getPtr(0, col).* = self.get(row, col);
+                if (clone_fn != .{}) {
+                    out.getPtr(0, col).* = clone_fn(self.get(row, col));
+                } else {
+                    out.getPtr(0, col).* = self.get(row, col);
+                }
             }
 
             return out;
@@ -232,6 +237,10 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
 
             return out;
         }
+
+        // TODO: Add `pushRow` and `pushCol`
+        //
+        // TODO: Add math operations (matrix and element-wise)
     };
 }
 

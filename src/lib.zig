@@ -11,15 +11,25 @@ fn isNumber(comptime T: type) bool {
     }
 }
 
-// TODO: Put in `Matrix` & add `errorToString` method
-pub const MatrixError = error{
-    InvalidSize,
-    InvalidSlice,
-    InvalidType,
-};
-
 pub fn Matrix(comptime T: type, allocator: Allocator) type {
     return struct {
+        pub const Error = error{
+            InvalidSize,
+            InvalidSlice,
+            RowIdxOutOfBounds,
+            ColIdxOutOfBounds,
+        };
+
+        /// Converts a `Matrix.Error` to `[]const u8`.
+        pub fn errToStr(err: Error) []const u8 {
+            switch (err) {
+                .InvalidSize => "Invalid size: The matrix must have at least one row and column",
+                .InvalidSlice => "Invalid slice: The slice must have `nrows * ncols` elements to create a valid matrix",
+                .RowIdxOutOfBounds => "Index out of bounds: The row index must be less than the number of rows in the matrix",
+                .ColIdxOutOfBounds => "Index out of bounds: The column index must be less than the number of columns in the matrix",
+            }
+        }
+
         const Self = @This();
 
         /// The elements of the matrix.
@@ -71,11 +81,11 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             // Input validation
             {
                 comptime if ((nrows == 0) or (ncols == 0)) {
-                    return MatrixError.InvalidSize;
+                    return Error.InvalidSize;
                 };
 
                 if (slice.len != nrows * ncols) {
-                    return MatrixError.InvalidSlice;
+                    return Error.InvalidSlice;
                 }
             }
 
@@ -156,32 +166,28 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return self._ncols * row + col;
         }
 
-        // FIXME: Return error union (don't panic)
-        //
         /// Returns the vaule at the specified index of the matrix.
-        pub fn get(self: *const Self, row: usize, col: usize) T {
+        pub fn get(self: *const Self, row: usize, col: usize) !T {
             // Input validation
             {
                 if (row >= self._nrows) {
-                    @panic("InvaidIndex: The row index must be less than the number of rows in the matrix");
+                    return Error.RowIdxOutOfBounds;
                 } else if (col >= self._ncols) {
-                    @panic("InvaidIndex: The column index must be less than the number of colunns in the matrix");
+                    return Error.ColIdxOutOfBounds;
                 }
             }
 
             return self._data[self.arrayIdx(row, col)];
         }
 
-        // FIXME: Return error union (don't panic)
-        //
         /// Returns a pointer to the specified index of the matrix.
-        pub fn getPtr(self: *const Self, row: usize, col: usize) *T {
+        pub fn getPtr(self: *const Self, row: usize, col: usize) !*T {
             // Input validation
             {
                 if (row >= self._nrows) {
-                    @panic("InvaidIndex: The row index must be less than the number of rows in the matrix");
+                    return Error.RowIdxOutOfBounds;
                 } else if (col >= self._ncols) {
-                    @panic("InvaidIndex: The column index must be less than the number of colunns in the matrix");
+                    return Error.ColIdxOutOfBounds;
                 }
             }
 
@@ -325,15 +331,15 @@ test "Index matrix" {
     var mat = try Matrix(i8, allocator).initFromSlice(2, 3, &slice);
     defer mat.deinit();
 
-    const x = mat.getPtr(0, 0);
+    const x = try mat.getPtr(0, 0);
     x.* = 99;
 
-    try testing.expectEqual(mat.get(0, 0), 99);
-    try testing.expectEqual(mat.get(0, 1), 2);
-    try testing.expectEqual(mat.get(0, 2), 3);
-    try testing.expectEqual(mat.get(1, 0), 4);
-    try testing.expectEqual(mat.get(1, 1), 5);
-    try testing.expectEqual(mat.get(1, 2), 6);
+    try testing.expectEqual(try mat.get(0, 0), 99);
+    try testing.expectEqual(try mat.get(0, 1), 2);
+    try testing.expectEqual(try mat.get(0, 2), 3);
+    try testing.expectEqual(try mat.get(1, 0), 4);
+    try testing.expectEqual(try mat.get(1, 1), 5);
+    try testing.expectEqual(try mat.get(1, 2), 6);
 }
 
 test "Get rows" {

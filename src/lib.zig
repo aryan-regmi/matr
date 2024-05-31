@@ -1,5 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
 const testing = std.testing;
 
 /// Checks if a type is a number.
@@ -10,6 +11,7 @@ fn isNumber(comptime T: type) bool {
     }
 }
 
+// TODO: Put in `Matrix` & add `errorToString` method
 pub const MatrixError = error{
     InvalidSize,
     InvalidSlice,
@@ -154,6 +156,8 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return self._ncols * row + col;
         }
 
+        // FIXME: Return error union (don't panic)
+        //
         /// Returns the vaule at the specified index of the matrix.
         pub fn get(self: *const Self, row: usize, col: usize) T {
             // Input validation
@@ -168,6 +172,8 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return self._data[self.arrayIdx(row, col)];
         }
 
+        // FIXME: Return error union (don't panic)
+        //
         /// Returns a pointer to the specified index of the matrix.
         pub fn getPtr(self: *const Self, row: usize, col: usize) *T {
             // Input validation
@@ -180,6 +186,38 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             }
 
             return @ptrCast(self._data[self.arrayIdx(row, col)..]);
+        }
+
+        // NOTE: Add `clone_fn` parameter for types that aren't trivially copyable.
+        //
+        /// Returns a new `Matrix` containing the elements of the specified row from `self`.
+        pub fn getRow(self: *const Self, row: usize) !Self {
+            // TODO: Check that row is in the index!
+            var out = try Self.initWithCapacity(1, self._ncols);
+            out._nrows = 1;
+            out._ncols = self._ncols;
+
+            for (0..self._ncols) |col| {
+                out.getPtr(0, col).* = self.get(row, col);
+            }
+
+            return out;
+        }
+
+        /// Returns an `ArrayList` containing pointers to the elements of the specified row in the matrix.
+        ///
+        /// # Note
+        /// The row must be freed by the caller using the same allocator used to initalize the matrix.
+        pub fn getRowPtr(self: *Self, row: usize) !ArrayList(*T) {
+            // TODO: Check that row is in the index!
+
+            var out = try ArrayList(*T).initCapacity(allocator, self._ncols);
+
+            for (0..self._ncols) |col| {
+                out.append(self.getPtr(row, col));
+            }
+
+            return out;
         }
     };
 }
@@ -296,4 +334,22 @@ test "Index matrix" {
     try testing.expectEqual(mat.get(1, 0), 4);
     try testing.expectEqual(mat.get(1, 1), 5);
     try testing.expectEqual(mat.get(1, 2), 6);
+}
+
+test "Get rows" {
+    // const allocator = testing.allocator;
+    //
+    // var slice = [_]i8{ 1, 2, 3, 4, 5, 6 };
+    // var mat = try Matrix(i8, allocator).initFromSlice(2, 3, &slice);
+    // defer mat.deinit();
+    //
+    // const x = mat.getPtr(0, 0);
+    // x.* = 99;
+    //
+    // try testing.expectEqual(mat.get(0, 0), 99);
+    // try testing.expectEqual(mat.get(0, 1), 2);
+    // try testing.expectEqual(mat.get(0, 2), 3);
+    // try testing.expectEqual(mat.get(1, 0), 4);
+    // try testing.expectEqual(mat.get(1, 1), 5);
+    // try testing.expectEqual(mat.get(1, 2), 6);
 }

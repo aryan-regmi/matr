@@ -198,7 +198,11 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         //
         /// Returns a new `Matrix` containing the elements of the specified row from `self`.
         pub fn getRow(self: *const Self, row: usize) !Self {
-            // TODO: Check that row is in the index!
+            // Input validation
+            if (row >= self._nrows) {
+                return Error.RowIdxOutOfBounds;
+            }
+
             var out = try Self.initWithCapacity(1, self._ncols);
             out._nrows = 1;
             out._ncols = self._ncols;
@@ -215,7 +219,10 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         /// # Note
         /// The row must be freed by the caller using the same allocator used to initalize the matrix.
         pub fn getRowPtr(self: *Self, row: usize) !ArrayList(*T) {
-            // TODO: Check that row is in the index!
+            // Input validation
+            if (row >= self._nrows) {
+                return Error.RowIdxOutOfBounds;
+            }
 
             var out = try ArrayList(*T).initCapacity(allocator, self._ncols);
 

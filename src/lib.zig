@@ -18,6 +18,8 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             InvalidSlice,
             RowIdxOutOfBounds,
             ColIdxOutOfBounds,
+            InvalidRowSize,
+            ResizeFailed,
         };
 
         /// Converts a `Matrix.Error` to `[]const u8`.
@@ -27,10 +29,13 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 .InvalidSlice => "Invalid slice: The slice must have `nrows * ncols` elements to create a valid matrix",
                 .RowIdxOutOfBounds => "Index out of bounds: The row index must be less than the number of rows in the matrix",
                 .ColIdxOutOfBounds => "Index out of bounds: The column index must be less than the number of columns in the matrix",
+                .InvalidRowSize => "Invalid row: The row must have as many elements as the number of columns in the matrix",
+                .ResizeFailed => "Resize failed: The matrix could not be resized successfully",
             }
         }
 
         const Self = @This();
+        const CloneFn = ?*const fn (T) T;
 
         /// The elements of the matrix.
         _data: []T,
@@ -195,7 +200,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         ///
         /// # Note
         /// If a type is not trivially copyable, a `clone_fn` should be provided to create a clone of the elements in `self`.
-        pub fn getRow(self: *const Self, row: usize, clone_fn: ?*const fn (T) T) !Self {
+        pub fn getRow(self: *const Self, row: usize, clone_fn: CloneFn) !Self {
             // Input validation
             if (row >= self._nrows) {
                 return Error.RowIdxOutOfBounds;
@@ -222,7 +227,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         ///
         /// # Note
         /// * The returned row must be freed by the caller.
-        /// * The pointers in the `ArrayList` will be invalidated if the underlying matrix is freed before it.
+        /// * The pointers in the `ArrayList` will be invalidated if the underlying matrix is freed or resized.
         pub fn getRowPtr(self: *Self, row: usize) !ArrayList(*T) {
             // Input validation
             if (row >= self._nrows) {
@@ -242,7 +247,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         ///
         /// # Note
         /// If a type is not trivially copyable, a `clone_fn` should be provided to create a clone of the elements in `self`.
-        pub fn getCol(self: *const Self, col: usize, clone_fn: ?*const fn (T) T) !Self {
+        pub fn getCol(self: *const Self, col: usize, clone_fn: CloneFn) !Self {
             // Input validation
             if (col >= self._ncols) {
                 return Error.ColIdxOutOfBounds;
@@ -269,7 +274,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         ///
         /// # Note
         /// * The returned column must be freed by the caller.
-        /// * The pointers in the `ArrayList` will be invalidated if the underlying matrix is freed before it.
+        /// * The pointers in the `ArrayList` will be invalidated if the underlying matrix is freed or resized.
         pub fn getColPtr(self: *Self, col: usize) !ArrayList(*T) {
             // Input validation
             if (col >= self._ncols) {
@@ -286,7 +291,82 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         }
 
         // TODO: Add `pushRow` and `pushCol`
-        //
+
+        /// Resizes the matrix by doubling its capacity.
+        fn resize(self: *Self, clone_fn: CloneFn) !void {
+            // Allocate new array
+            var new_cap = self._capacity * 2;
+            if ((self._nrows == 0) and (self._ncols == 0)) {
+                new_cap = 2;
+            } else if (self._nrows == 0) {
+                new_cap = self._ncols * 2;
+            } else if (self._ncols == 0) {
+                new_cap = self._nrows * 2;
+            }
+            const resized = try allocator.alloc(T, new_cap);
+
+            // Copy old values
+            for (0..self._nrows * self._ncols) |i| {
+                if (clone_fn != null) {
+                    resized[i] = clone_fn.?(self._data[i]);
+                } else {
+                    resized[i] = self._data[i];
+                }
+            }
+
+            // Free old array & replace w/ resized
+            allocator.free(self._data);
+            self._data = resized;
+            self._capacity = new_cap;
+        }
+
+        /// Sets the row at the specified index to the given `row`.
+        pub fn setRow(self: *Self, idx: usize, row: []T, clone_fn: CloneFn) !void {
+            // Input validation
+            {
+                if (idx >= self._nrows) {
+                    return Error.RowIdxOutOfBounds;
+                }
+                if (row.len != self._ncols) {
+                    return Error.InvalidRowSize;
+                }
+            }
+
+            // std.log.warn("nrows: {any}, ncols: {any}", .{ self._nrows, self._ncols });
+            for (0..self._ncols) |col| {
+                const elem_ptr = try self.getPtr(idx, col);
+                if (clone_fn != null) {
+                    elem_ptr.* = clone_fn.?(row[col]);
+                } else {
+                    elem_ptr.* = row[col];
+                }
+            }
+        }
+
+        /// Appends the given row to the matrix.
+        ///
+        /// # Note
+        /// The row must have `self._ncols` number of elements.
+        pub fn pushRow(self: *Self, row: []T, clone_fn: CloneFn) !void {
+            // Input validation
+            {
+                if (self._ncols == 0) {
+                    self._ncols = row.len;
+                } else if (row.len != self._ncols) {
+                    return Error.InvalidRowSize;
+                }
+            }
+
+            // Resize if necessary
+            if (self._capacity < (self._nrows + 1) * self._ncols) {
+                self.resize(clone_fn) catch return Error.ResizeFailed;
+            }
+
+            // Push the values from the row
+            self._nrows += 1;
+            try self.setRow(self._nrows - 1, row, clone_fn);
+        }
+
         // TODO: Add math operations (matrix and element-wise)
     };
 }
@@ -458,5 +538,21 @@ test "Get cols" {
         } else {
             try testing.expectEqual(value, slice[3]);
         }
+    }
+}
+
+test "Push rows" {
+    const allocator = testing.allocator;
+
+    var mat = Matrix(i8, allocator).init();
+    defer mat.deinit();
+
+    var slice = [_]i8{ 1, 2, 3 };
+    try mat.pushRow(&slice, null);
+
+    const row = try mat.getRowPtr(0);
+    defer row.deinit();
+    for (row.items, 0..) |value, i| {
+        try testing.expectEqual(value.*, slice[i]);
     }
 }

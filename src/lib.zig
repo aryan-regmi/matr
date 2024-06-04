@@ -19,6 +19,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             RowIdxOutOfBounds,
             ColIdxOutOfBounds,
             InvalidRowSize,
+            InvalidColSize,
             ResizeFailed,
         };
 
@@ -30,6 +31,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 .RowIdxOutOfBounds => "Index out of bounds: The row index must be less than the number of rows in the matrix",
                 .ColIdxOutOfBounds => "Index out of bounds: The column index must be less than the number of columns in the matrix",
                 .InvalidRowSize => "Invalid row: The row must have as many elements as the number of columns in the matrix",
+                .InvalidColSize => "Invalid column: The column must have as many elements as the number of rows in the matrix",
                 .ResizeFailed => "Resize failed: The matrix could not be resized successfully",
             }
         }
@@ -290,8 +292,6 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return out;
         }
 
-        // TODO: Add `pushRow` and `pushCol`
-
         /// Resizes the matrix by doubling its capacity.
         fn resize(self: *Self, clone_fn: CloneFn) !void {
             // Allocate new array
@@ -321,7 +321,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         }
 
         /// Sets the row at the specified index to the given `row`.
-        pub fn setRow(self: *Self, idx: usize, row: []T, clone_fn: CloneFn) !void {
+        pub fn setRow(self: *Self, idx: usize, row: []const T, clone_fn: CloneFn) !void {
             // Input validation
             {
                 if (idx >= self._nrows) {
@@ -332,7 +332,6 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 }
             }
 
-            // std.log.warn("nrows: {any}, ncols: {any}", .{ self._nrows, self._ncols });
             for (0..self._ncols) |col| {
                 const elem_ptr = try self.getPtr(idx, col);
                 if (clone_fn != null) {
@@ -343,11 +342,11 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             }
         }
 
-        /// Appends the given row to the matrix.
+        /// Appends the given row to the end of the matrix.
         ///
         /// # Note
         /// The row must have `self._ncols` number of elements.
-        pub fn pushRow(self: *Self, row: []T, clone_fn: CloneFn) !void {
+        pub fn pushRow(self: *Self, row: []const T, clone_fn: CloneFn) !void {
             // Input validation
             {
                 if (self._ncols == 0) {
@@ -365,6 +364,52 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             // Push the values from the row
             self._nrows += 1;
             try self.setRow(self._nrows - 1, row, clone_fn);
+        }
+
+        /// Sets the row at the specified index to the given `row`.
+        pub fn setCol(self: *Self, idx: usize, col: []const T, clone_fn: CloneFn) !void {
+            // Input validation
+            {
+                if (idx >= self._ncols) {
+                    return Error.ColIdxOutOfBounds;
+                }
+                if (col.len != self._nrows) {
+                    return Error.InvalidColSize;
+                }
+            }
+
+            for (0..self._nrows) |row| {
+                const elem_ptr = try self.getPtr(row, idx);
+                if (clone_fn != null) {
+                    elem_ptr.* = clone_fn.?(col[row]);
+                } else {
+                    elem_ptr.* = col[row];
+                }
+            }
+        }
+
+        /// Appends the given column to the end of the matrix.
+        ///
+        /// # Note
+        /// The column must have `self._nrows` number of elements.
+        pub fn pushCol(self: *Self, col: []const T, clone_fn: CloneFn) !void {
+            // Input validation
+            {
+                if (self._nrows == 0) {
+                    self._nrows = col.len;
+                } else if (col.len != self._nrows) {
+                    return Error.InvalidColSize;
+                }
+            }
+
+            // Resize if necessary
+            if (self._capacity < self._nrows * (self._ncols + 1)) {
+                self.resize(clone_fn) catch return Error.ResizeFailed;
+            }
+
+            // Push the values from the row
+            self._ncols += 1;
+            try self.setCol(self._ncols - 1, col, clone_fn);
         }
 
         // TODO: Add math operations (matrix and element-wise)
@@ -541,18 +586,34 @@ test "Get cols" {
     }
 }
 
-test "Push rows" {
+test "Push rows and cols" {
     const allocator = testing.allocator;
 
     var mat = Matrix(i8, allocator).init();
     defer mat.deinit();
 
     var slice = [_]i8{ 1, 2, 3 };
-    try mat.pushRow(&slice, null);
+    try mat.pushRow(&[_]i8{ 1, 2, 3 }, null);
 
     const row = try mat.getRowPtr(0);
     defer row.deinit();
     for (row.items, 0..) |value, i| {
         try testing.expectEqual(value.*, slice[i]);
+    }
+
+    slice = [_]i8{ 4, 5, 6 };
+    try mat.pushRow(&[_]i8{ 4, 5, 6 }, null);
+    const row2 = try mat.getRowPtr(1);
+    defer row2.deinit();
+    for (row2.items, 0..) |value, i| {
+        try testing.expectEqual(value.*, slice[i]);
+    }
+
+    const slice2 = [_]i8{ 7, 8 };
+    try mat.pushCol(&[_]i8{ 7, 8 }, null);
+    const col = try mat.getColPtr(3);
+    defer col.deinit();
+    for (col.items, 0..) |value, i| {
+        try testing.expectEqual(value.*, slice2[i]);
     }
 }

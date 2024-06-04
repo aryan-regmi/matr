@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const testing = std.testing;
+const todo = unreachable;
 
 /// Checks if a type is a number.
 fn isNumber(comptime T: type) bool {
@@ -11,6 +12,10 @@ fn isNumber(comptime T: type) bool {
     }
 }
 
+/// Represents a matrix of type `T`.
+///
+/// # Note
+/// It is recommend to use a pool/buffer as the allocator in order to make freeing temporary matricies simple.
 pub fn Matrix(comptime T: type, allocator: Allocator) type {
     return struct {
         pub const Error = error{
@@ -412,7 +417,59 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             try self.setCol(self._ncols - 1, col, clone_fn);
         }
 
-        // TODO: Add math operations (matrix and element-wise)
+        pub fn scale(self: *const Self, scalar: T) !Self {
+            _ = scalar; // autofix
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn addElems(self: *const Self, other: *const Self) !Self {
+            _ = other; // autofix
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn subElems(self: *const Self, other: *const Self) !Self {
+            _ = other; // autofix
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn mul(self: *const Self, other: *const Self) !Self {
+            _ = other; // autofix
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn mulElems(self: *const Self, other: *const Self) !Self {
+            _ = other; // autofix
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn leftDiv(self: *const Self, other: *const Self) !Self {
+            _ = other; // autofix
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn rightDiv(self: *const Self, other: *const Self) !Self {
+            _ = other; // autofix
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn inverse(self: *const Self) !Self {
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn transpose(self: *const Self) !Self {
+            _ = self; // autofix
+            todo;
+        }
+
+        // TODO: Add in-place versions where possible
     };
 }
 

@@ -459,6 +459,12 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             todo;
         }
 
+        pub fn divElems(self: *const Self, other: *const Self) !Self {
+            _ = other; // autofix
+            _ = self; // autofix
+            todo;
+        }
+
         pub fn inverse(self: *const Self) !Self {
             _ = self; // autofix
             todo;
@@ -467,6 +473,68 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         pub fn transpose(self: *const Self) !Self {
             _ = self; // autofix
             todo;
+        }
+
+        pub fn norm(self: *const Self) !Self {
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn isSquare(self: *const Self) bool {
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn isTriangularUpper(self: *const Self) bool {
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn isTriangularLower(self: *const Self) bool {
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn qr(self: *const Self) !Self {
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn lu(self: *const Self) !Self {
+            _ = self; // autofix
+            todo;
+        }
+
+        pub fn numRows(self: *const Self) usize {
+            return self._nrows;
+        }
+
+        pub fn numCols(self: *const Self) usize {
+            return self._ncols;
+        }
+
+        pub fn elements(self: *const Self) []const T {
+            return self._data;
+        }
+
+        /// Returns a string representation of the matrix.
+        ///
+        /// TODO: Take in buffer and dont return anything
+        pub fn toString(self: *const Self) ![]u8 {
+            var buf = ArrayList(u8).init(allocator);
+            defer buf.deinit();
+
+            try buf.writer().print("Matrix ({any}x{any}) [", .{ self._nrows, self._ncols });
+            for (0..self._nrows) |i| {
+                try buf.writer().print("\n", .{});
+                for (0..self._ncols) |j| {
+                    const val = try self.get(i, j);
+                    try buf.writer().print(" {any} ", .{val});
+                }
+            }
+            try buf.writer().print("\n]", .{});
+
+            return buf.toOwnedSlice();
         }
 
         // TODO: Add in-place versions where possible
@@ -585,6 +653,10 @@ test "Index matrix" {
     try testing.expectEqual(try mat.get(1, 0), 4);
     try testing.expectEqual(try mat.get(1, 1), 5);
     try testing.expectEqual(try mat.get(1, 2), 6);
+
+    const str = try mat.toString();
+    defer allocator.free(str);
+    std.log.warn("matz: {s}", .{str});
 }
 
 test "Get rows" {

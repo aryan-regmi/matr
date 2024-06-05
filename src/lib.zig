@@ -13,6 +13,8 @@ fn isNumber(comptime T: type) bool {
 }
 
 // TODO: Add clone method
+//
+// TODO: Add in-place versions where possible
 
 /// Represents a matrix of type `T`.
 ///
@@ -28,6 +30,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             InvalidRowSize,
             InvalidColSize,
             ResizeFailed,
+            InvalidDimensions,
         };
 
         /// Converts a `Matrix.Error` to `[]const u8`.
@@ -40,6 +43,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 .InvalidRowSize => "Invalid row: The row must have as many elements as the number of columns in the matrix",
                 .InvalidColSize => "Invalid column: The column must have as many elements as the number of rows in the matrix",
                 .ResizeFailed => "Resize failed: The matrix could not be resized successfully",
+                .InvalidDimensions => "Invalid dimensions: The two matricies must have the same number of rows and columns",
             }
         }
 
@@ -447,7 +451,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 @compileError("Invalid type: The matrix must be scaled by a numerical type");
             };
 
-            var out = Self.initWithCapacity(self._nrows, self._ncols);
+            var out = try Self.initWithCapacity(self._nrows, self._ncols);
             for (0..self._nrows * self._ncols) |i| {
                 out._data[i] = self._data[i] * scalar;
             }
@@ -460,15 +464,37 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         /// # Note
         /// The type `T` must be a numerical type (i.e int or float).
         pub fn addElems(self: *const Self, other: *const Self) !Self {
-            _ = other; // autofix
-            _ = self; // autofix
-            todo;
+            // Input validation
+            {
+                comptime if (isNumber(T) == false) {
+                    @compileError("Invalid type: The matrix must be scaled by a numerical type");
+                };
+
+                if ((self._nrows != other._nrows) or (self._ncols != other._ncols)) {
+                    return Error.InvalidDimensions;
+                }
+            }
+
+            const out = try Self.initWithCapacity(self._nrows, self._ncols);
+            for (0..self._nrows * self._ncols) |i| {
+                out._data[i] = self._data[i] + other._data[i];
+            }
+
+            return out;
         }
 
         pub fn addScalar(self: *const Self, scalar: T) !Self {
-            _ = scalar; // autofix
-            _ = self; // autofix
-            todo;
+            // Input validation
+            comptime if (isNumber(T) == false) {
+                @compileError("Invalid type: The matrix must be scaled by a numerical type");
+            };
+
+            var out = try Self.initWithCapacity(self._nrows, self._ncols);
+            for (0..self._nrows * self._ncols) |i| {
+                out._data[i] = self._data[i] + scalar;
+            }
+
+            return out;
         }
 
         pub fn subElems(self: *const Self, other: *const Self) !Self {
@@ -560,8 +586,6 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         }
 
         /// Returns a string representation of the matrix.
-        ///
-        /// TODO: Take in buffer and dont return anything
         pub fn toString(self: *const Self, buf: []u8) ![]u8 {
             var tmp = ArrayList(u8).init(allocator);
             defer tmp.deinit();
@@ -579,8 +603,6 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             @memcpy(buf[0..tmp.items.len], tmp.items);
             return buf[0..tmp.items.len];
         }
-
-        // TODO: Add in-place versions where possible
     };
 }
 

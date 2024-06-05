@@ -12,6 +12,8 @@ fn isNumber(comptime T: type) bool {
     }
 }
 
+// TODO: Add clone method
+
 /// Represents a matrix of type `T`.
 ///
 /// # Note
@@ -435,14 +437,36 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             self._ncols += 1;
         }
 
+        /// Returns a new matrix containing each element of `self` multiplied by the `scalar`.
+        ///
+        /// # Note
+        /// The scalar must be a numerical type (i.e int or float).
         pub fn scale(self: *const Self, scalar: T) !Self {
-            _ = scalar; // autofix
+            // Input validation
+            comptime if (isNumber(T) == false) {
+                @compileError("Invalid type: The matrix must be scaled by a numerical type");
+            };
+
+            var out = Self.initWithCapacity(self._nrows, self._ncols);
+            for (0..self._nrows * self._ncols) |i| {
+                out._data[i] = self._data[i] * scalar;
+            }
+
+            return out;
+        }
+
+        /// Returns a new matrix containing the result of element-wise addition of `self` and `other`.
+        ///
+        /// # Note
+        /// The type `T` must be a numerical type (i.e int or float).
+        pub fn addElems(self: *const Self, other: *const Self) !Self {
+            _ = other; // autofix
             _ = self; // autofix
             todo;
         }
 
-        pub fn addElems(self: *const Self, other: *const Self) !Self {
-            _ = other; // autofix
+        pub fn addScalar(self: *const Self, scalar: T) !Self {
+            _ = scalar; // autofix
             _ = self; // autofix
             todo;
         }
@@ -761,7 +785,7 @@ test "Push rows and cols" {
         try testing.expectEqual(value.*, slice2[i]);
     }
 
-    var buf: [100]u8 = undefined;
-    const str = try mat.toString(&buf);
-    std.log.warn("mat: {s}", .{str});
+    // var buf: [100]u8 = undefined;
+    // const str = try mat.toString(&buf);
+    // std.log.warn("mat: {s}", .{str});
 }

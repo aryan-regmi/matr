@@ -190,7 +190,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         }
 
         /// Returns a pointer to the specified index of the matrix.
-        pub fn getPtr(self: *const Self, row: usize, col: usize) !*T {
+        pub fn getPtr(self: *Self, row: usize, col: usize) !*T {
             // Input validation
             {
                 if (row >= self._nrows) {
@@ -300,14 +300,17 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         /// Resizes the matrix by doubling its capacity.
         fn resize(self: *Self, clone_fn: CloneFn) !void {
             // Allocate new array
-            var new_cap = self._capacity * 2;
-            if ((self._nrows == 0) and (self._ncols == 0)) {
-                new_cap = 2;
-            } else if (self._nrows == 0) {
-                new_cap = self._ncols * 2;
-            } else if (self._ncols == 0) {
-                new_cap = self._nrows * 2;
-            }
+            const new_cap: usize = calc_cap: {
+                if ((self._nrows == 0) and (self._ncols == 0)) {
+                    break :calc_cap 2;
+                } else if (self._nrows == 0) {
+                    break :calc_cap self._ncols * 2;
+                } else if (self._ncols == 0) {
+                    break :calc_cap self._nrows * 2;
+                } else {
+                    break :calc_cap self._capacity * 2;
+                }
+            };
             const resized = try allocator.alloc(T, new_cap);
 
             // Copy old values
@@ -412,9 +415,24 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 self.resize(clone_fn) catch return Error.ResizeFailed;
             }
 
-            // Push the values from the row
+            for (1..col.len + 1) |i| {
+                // Shift everything after the insert index to the right
+                const idx = self._ncols * i + (i - 1);
+                const nshifted = self._ncols * self._nrows - self._ncols * i;
+                const src = self._data[idx..];
+                const dst = self._data[idx + 1 ..];
+                const tmp = try allocator.alloc(T, nshifted);
+                defer allocator.free(tmp);
+                @memcpy(tmp, src[0..nshifted]);
+                for (0..nshifted) |n| {
+                    dst[n] = tmp[n];
+                }
+
+                // Update index w/ value from `col`
+                self._data[idx] = col[i - 1];
+            }
+
             self._ncols += 1;
-            try self.setCol(self._ncols - 1, col, clone_fn);
         }
 
         pub fn scale(self: *const Self, scalar: T) !Self {
@@ -656,7 +674,6 @@ test "Index matrix" {
 
     const str = try mat.toString();
     defer allocator.free(str);
-    std.log.warn("matz: {s}", .{str});
 }
 
 test "Get rows" {
@@ -745,4 +762,8 @@ test "Push rows and cols" {
     for (col.items, 0..) |value, i| {
         try testing.expectEqual(value.*, slice2[i]);
     }
+
+    // const str = try mat.toString();
+    // defer allocator.free(str);
+    // std.log.warn("mat: {s}", .{str});
 }

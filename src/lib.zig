@@ -12,6 +12,8 @@ fn isNumber(comptime T: type) bool {
     }
 }
 
+// TODO: Add examples to function docs
+//
 // TODO: Add clone method
 //
 // TODO: Add in-place versions where possible
@@ -483,6 +485,10 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return out;
         }
 
+        /// Returns a new matrix containing `scalar` added to each element of `self`.
+        ///
+        /// # Note
+        /// The scalar must be a numerical type (i.e int or float).
         pub fn addScalar(self: *const Self, scalar: T) !Self {
             // Input validation
             comptime if (isNumber(T) == false) {
@@ -497,10 +503,28 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return out;
         }
 
+        /// Returns a new matrix containing the result of element-wise subtraction of `self` and `other`.
+        ///
+        /// # Note
+        /// The type `T` must be a numerical type (i.e int or float).
         pub fn subElems(self: *const Self, other: *const Self) !Self {
-            _ = other; // autofix
-            _ = self; // autofix
-            todo;
+            // Input validation
+            {
+                comptime if (isNumber(T) == false) {
+                    @compileError("Invalid type: The matrix must be scaled by a numerical type");
+                };
+
+                if ((self._nrows != other._nrows) or (self._ncols != other._ncols)) {
+                    return Error.InvalidDimensions;
+                }
+            }
+
+            const out = try Self.initWithCapacity(self._nrows, self._ncols);
+            for (0..self._nrows * self._ncols) |i| {
+                out._data[i] = self._data[i] - other._data[i];
+            }
+
+            return out;
         }
 
         pub fn mul(self: *const Self, other: *const Self) !Self {

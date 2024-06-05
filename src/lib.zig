@@ -538,21 +538,22 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         /// Returns a string representation of the matrix.
         ///
         /// TODO: Take in buffer and dont return anything
-        pub fn toString(self: *const Self) ![]u8 {
-            var buf = ArrayList(u8).init(allocator);
-            defer buf.deinit();
+        pub fn toString(self: *const Self, buf: []u8) ![]u8 {
+            var tmp = ArrayList(u8).init(allocator);
+            defer tmp.deinit();
 
-            try buf.writer().print("Matrix ({any}x{any}) [", .{ self._nrows, self._ncols });
+            try tmp.writer().print("Matrix ({any}x{any}) [", .{ self._nrows, self._ncols });
             for (0..self._nrows) |i| {
-                try buf.writer().print("\n", .{});
+                try tmp.writer().print("\n", .{});
                 for (0..self._ncols) |j| {
                     const val = try self.get(i, j);
-                    try buf.writer().print(" {any} ", .{val});
+                    try tmp.writer().print(" {any} ", .{val});
                 }
             }
-            try buf.writer().print("\n]", .{});
+            try tmp.writer().print("\n]", .{});
 
-            return buf.toOwnedSlice();
+            @memcpy(buf[0..tmp.items.len], tmp.items);
+            return buf[0..tmp.items.len];
         }
 
         // TODO: Add in-place versions where possible
@@ -671,9 +672,6 @@ test "Index matrix" {
     try testing.expectEqual(try mat.get(1, 0), 4);
     try testing.expectEqual(try mat.get(1, 1), 5);
     try testing.expectEqual(try mat.get(1, 2), 6);
-
-    const str = try mat.toString();
-    defer allocator.free(str);
 }
 
 test "Get rows" {
@@ -763,7 +761,7 @@ test "Push rows and cols" {
         try testing.expectEqual(value.*, slice2[i]);
     }
 
-    // const str = try mat.toString();
-    // defer allocator.free(str);
-    // std.log.warn("mat: {s}", .{str});
+    var buf: [100]u8 = undefined;
+    const str = try mat.toString(&buf);
+    std.log.warn("mat: {s}", .{str});
 }

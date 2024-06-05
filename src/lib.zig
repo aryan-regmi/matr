@@ -33,6 +33,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             InvalidColSize,
             ResizeFailed,
             InvalidDimensions,
+            InvalidMulDimensions,
         };
 
         /// Converts a `Matrix.Error` to `[]const u8`.
@@ -46,6 +47,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 .InvalidColSize => "Invalid column: The column must have as many elements as the number of rows in the matrix",
                 .ResizeFailed => "Resize failed: The matrix could not be resized successfully",
                 .InvalidDimensions => "Invalid dimensions: The two matricies must have the same number of rows and columns",
+                .InvalidMulDimensions => "Invalid dimensions: The number of rows in the `other` matrix must equal the number of columns in `self`",
             }
         }
 
@@ -527,10 +529,34 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return out;
         }
 
+        /// Returns a new matrix containing the result of element-wise subtraction of `self` and `other`.
+        ///
+        /// # Note
+        /// The type `T` must be a numerical type (i.e int or float).
         pub fn mul(self: *const Self, other: *const Self) !Self {
-            _ = other; // autofix
-            _ = self; // autofix
-            todo;
+            // Input validation
+            {
+                comptime if (isNumber(T) == false) {
+                    @compileError("Invalid type: The matrix must be scaled by a numerical type");
+                };
+
+                if (self._ncols != other._nrows) {
+                    return Error.InvalidMulDimensions;
+                }
+            }
+
+            var out = try Self.initWithCapacity(self._nrows, other._ncols);
+            for (0..self._nrows) |i| {
+                for (0..other._ncols) |j| {
+                    var sum = 0;
+                    for (0..self._ncols) |k| {
+                        sum += self._data[self.arrayIdx(i, k)] * other._data[other.arrayIdx(k, j)];
+                    }
+                    out._data[out.arrayIdx(i, j)] = sum;
+                }
+            }
+
+            return out;
         }
 
         pub fn mulElems(self: *const Self, other: *const Self) !Self {

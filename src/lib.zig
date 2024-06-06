@@ -537,7 +537,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             // Input validation
             {
                 comptime if (isNumber(T) == false) {
-                    @compileError("Invalid type: The matrix must be scaled by a numerical type");
+                    @compileError("Invalid type: The matricies must contain a numerical type (int or float)");
                 };
 
                 if (self._ncols != other._nrows) {
@@ -560,9 +560,23 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         }
 
         pub fn mulElems(self: *const Self, other: *const Self) !Self {
-            _ = other; // autofix
-            _ = self; // autofix
-            todo;
+            // Input validation
+            {
+                comptime if (isNumber(T) == false) {
+                    @compileError("Invalid type: The matricies must contain a numerical type (int or float)");
+                };
+
+                if ((self._nrows != other._nrows) or (self._ncols != other._ncols)) {
+                    return Error.InvalidDimensions;
+                }
+            }
+
+            var out = try Self.initWithCapacity(self._nrows, self._ncols);
+            for (0..self._nrows * self._ncols) |i| {
+                out._data[i] = self._data[i] * other._data[i];
+            }
+
+            return out;
         }
 
         pub fn leftDiv(self: *const Self, other: *const Self) !Self {

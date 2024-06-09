@@ -505,6 +505,24 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return out;
         }
 
+        /// Returns a new matrix containing `scalar` subtracted from to each element of `self`.
+        ///
+        /// # Note
+        /// The scalar must be a numerical type (i.e int or float).
+        pub fn subScalar(self: *const Self, scalar: T) !Self {
+            // Input validation
+            comptime if (isNumber(T) == false) {
+                @compileError("Invalid type: The matrix must be scaled by a numerical type");
+            };
+
+            var out = try Self.initWithCapacity(self._nrows, self._ncols);
+            for (0..self._nrows * self._ncols) |i| {
+                out._data[i] = self._data[i] - scalar;
+            }
+
+            return out;
+        }
+
         /// Returns a new matrix containing the result of element-wise subtraction of `self` and `other`.
         ///
         /// # Note
@@ -529,7 +547,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return out;
         }
 
-        /// Returns a new matrix containing the result of element-wise subtraction of `self` and `other`.
+        /// Returns a new matrix containing the result of element-wise multiplication of `self` and `other`.
         ///
         /// # Note
         /// The type `T` must be a numerical type (i.e int or float).
@@ -559,6 +577,10 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return out;
         }
 
+        /// Returns a new matrix containing the result of element-wise multiplication of `self` and `other`.
+        ///
+        /// # Note
+        /// The type `T` must be a numerical type (i.e int or float).
         pub fn mulElems(self: *const Self, other: *const Self) !Self {
             // Input validation
             {

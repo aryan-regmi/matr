@@ -17,6 +17,8 @@ fn isNumber(comptime T: type) bool {
 // TODO: Add clone method
 //
 // TODO: Add in-place versions where possible
+//
+// TODO: Replace all error returns in arthimetic methods w/ panics (for easier chaining)
 
 /// Represents a matrix of type `T`.
 ///
@@ -34,6 +36,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             ResizeFailed,
             InvalidDimensions,
             InvalidMulDimensions,
+            InitFailed,
         };
 
         /// Converts a `Matrix.Error` to `[]const u8`.
@@ -48,6 +51,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 .ResizeFailed => "Resize failed: The matrix could not be resized successfully",
                 .InvalidDimensions => "Invalid dimensions: The two matricies must have the same number of rows and columns",
                 .InvalidMulDimensions => "Invalid dimensions: The number of rows in the `other` matrix must equal the number of columns in `self`",
+                .InitFailed => "Failed to allocate space for the matrix",
             }
         }
 
@@ -449,13 +453,13 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         ///
         /// # Note
         /// The scalar must be a numerical type (i.e int or float).
-        pub fn scale(self: *const Self, scalar: T) !Self {
+        pub fn scale(self: *const Self, scalar: T) Self {
             // Input validation
             comptime if (isNumber(T) == false) {
                 @compileError("Invalid type: The matrix must be scaled by a numerical type");
             };
 
-            var out = try Self.initWithCapacity(self._nrows, self._ncols);
+            var out = Self.initWithCapacity(self._nrows, self._ncols) catch @panic(errToStr(Error.InitFailed));
             for (0..self._nrows * self._ncols) |i| {
                 out._data[i] = self._data[i] * scalar;
             }
@@ -467,7 +471,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         ///
         /// # Note
         /// The type `T` must be a numerical type (i.e int or float).
-        pub fn addElems(self: *const Self, other: *const Self) !Self {
+        pub fn addElems(self: *const Self, other: *const Self) Self {
             // Input validation
             {
                 comptime if (isNumber(T) == false) {
@@ -475,11 +479,11 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 };
 
                 if ((self._nrows != other._nrows) or (self._ncols != other._ncols)) {
-                    return Error.InvalidDimensions;
+                    @panic(errToStr(Error.InvalidDimensions));
                 }
             }
 
-            const out = try Self.initWithCapacity(self._nrows, self._ncols);
+            const out = Self.initWithCapacity(self._nrows, self._ncols) catch @panic(errToStr(Error.InitFailed));
             for (0..self._nrows * self._ncols) |i| {
                 out._data[i] = self._data[i] + other._data[i];
             }
@@ -491,13 +495,13 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         ///
         /// # Note
         /// The scalar must be a numerical type (i.e int or float).
-        pub fn addScalar(self: *const Self, scalar: T) !Self {
+        pub fn addScalar(self: *const Self, scalar: T) Self {
             // Input validation
             comptime if (isNumber(T) == false) {
                 @compileError("Invalid type: The matrix must be scaled by a numerical type");
             };
 
-            var out = try Self.initWithCapacity(self._nrows, self._ncols);
+            var out = Self.initWithCapacity(self._nrows, self._ncols) catch @panic(errToStr(Error.InitFailed));
             for (0..self._nrows * self._ncols) |i| {
                 out._data[i] = self._data[i] + scalar;
             }
@@ -509,13 +513,13 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         ///
         /// # Note
         /// The scalar must be a numerical type (i.e int or float).
-        pub fn subScalar(self: *const Self, scalar: T) !Self {
+        pub fn subScalar(self: *const Self, scalar: T) Self {
             // Input validation
             comptime if (isNumber(T) == false) {
                 @compileError("Invalid type: The matrix must be scaled by a numerical type");
             };
 
-            var out = try Self.initWithCapacity(self._nrows, self._ncols);
+            var out = Self.initWithCapacity(self._nrows, self._ncols) catch @panic(errToStr(Error.InitFailed));
             for (0..self._nrows * self._ncols) |i| {
                 out._data[i] = self._data[i] - scalar;
             }
@@ -527,7 +531,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         ///
         /// # Note
         /// The type `T` must be a numerical type (i.e int or float).
-        pub fn subElems(self: *const Self, other: *const Self) !Self {
+        pub fn subElems(self: *const Self, other: *const Self) Self {
             // Input validation
             {
                 comptime if (isNumber(T) == false) {
@@ -535,11 +539,11 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 };
 
                 if ((self._nrows != other._nrows) or (self._ncols != other._ncols)) {
-                    return Error.InvalidDimensions;
+                    @panic(errToStr(Error.InvalidDimensions));
                 }
             }
 
-            const out = try Self.initWithCapacity(self._nrows, self._ncols);
+            const out = Self.initWithCapacity(self._nrows, self._ncols) catch @panic(errToStr(Error.InitFailed));
             for (0..self._nrows * self._ncols) |i| {
                 out._data[i] = self._data[i] - other._data[i];
             }
@@ -551,7 +555,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         ///
         /// # Note
         /// The type `T` must be a numerical type (i.e int or float).
-        pub fn mul(self: *const Self, other: *const Self) !Self {
+        pub fn mul(self: *const Self, other: *const Self) Self {
             // Input validation
             {
                 comptime if (isNumber(T) == false) {
@@ -559,11 +563,11 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 };
 
                 if (self._ncols != other._nrows) {
-                    return Error.InvalidMulDimensions;
+                    @panic(errToStr(Error.InvalidMulDimensions));
                 }
             }
 
-            var out = try Self.initWithCapacity(self._nrows, other._ncols);
+            var out = Self.initWithCapacity(self._nrows, other._ncols) catch @panic(errToStr(Error.InitFailed));
             for (0..self._nrows) |i| {
                 for (0..other._ncols) |j| {
                     var sum = 0;
@@ -581,7 +585,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         ///
         /// # Note
         /// The type `T` must be a numerical type (i.e int or float).
-        pub fn mulElems(self: *const Self, other: *const Self) !Self {
+        pub fn mulElems(self: *const Self, other: *const Self) Self {
             // Input validation
             {
                 comptime if (isNumber(T) == false) {
@@ -589,11 +593,11 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 };
 
                 if ((self._nrows != other._nrows) or (self._ncols != other._ncols)) {
-                    return Error.InvalidDimensions;
+                    @panic(errToStr(Error.InvalidDimensions));
                 }
             }
 
-            var out = try Self.initWithCapacity(self._nrows, self._ncols);
+            var out = Self.initWithCapacity(self._nrows, self._ncols) catch @panic(errToStr(Error.InitFailed));
             for (0..self._nrows * self._ncols) |i| {
                 out._data[i] = self._data[i] * other._data[i];
             }
@@ -601,35 +605,35 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return out;
         }
 
-        pub fn leftDiv(self: *const Self, other: *const Self) !Self {
+        pub fn leftDiv(self: *const Self, other: *const Self) Self {
             _ = other; // autofix
             _ = self; // autofix
             todo;
         }
 
-        pub fn rightDiv(self: *const Self, other: *const Self) !Self {
+        pub fn rightDiv(self: *const Self, other: *const Self) Self {
             _ = other; // autofix
             _ = self; // autofix
             todo;
         }
 
-        pub fn divElems(self: *const Self, other: *const Self) !Self {
+        pub fn divElems(self: *const Self, other: *const Self) Self {
             _ = other; // autofix
             _ = self; // autofix
             todo;
         }
 
-        pub fn inverse(self: *const Self) !Self {
+        pub fn inverse(self: *const Self) Self {
             _ = self; // autofix
             todo;
         }
 
-        pub fn transpose(self: *const Self) !Self {
+        pub fn transpose(self: *const Self) Self {
             _ = self; // autofix
             todo;
         }
 
-        pub fn norm(self: *const Self) !Self {
+        pub fn norm(self: *const Self) Self {
             _ = self; // autofix
             todo;
         }
@@ -649,12 +653,12 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             todo;
         }
 
-        pub fn qr(self: *const Self) !Self {
+        pub fn qr(self: *const Self) Self {
             _ = self; // autofix
             todo;
         }
 
-        pub fn lu(self: *const Self) !Self {
+        pub fn lu(self: *const Self) Self {
             _ = self; // autofix
             todo;
         }

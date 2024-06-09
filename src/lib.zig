@@ -17,8 +17,6 @@ fn isNumber(comptime T: type) bool {
 // TODO: Add clone method
 //
 // TODO: Add in-place versions where possible
-//
-// TODO: Replace all error returns in arthimetic methods w/ panics (for easier chaining)
 
 /// Represents a matrix of type `T`.
 ///
@@ -42,16 +40,16 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
         /// Converts a `Matrix.Error` to `[]const u8`.
         pub fn errToStr(err: Error) []const u8 {
             switch (err) {
-                .InvalidSize => "Invalid size: The matrix must have at least one row and column",
-                .InvalidSlice => "Invalid slice: The slice must have `nrows * ncols` elements to create a valid matrix",
-                .RowIdxOutOfBounds => "Index out of bounds: The row index must be less than the number of rows in the matrix",
-                .ColIdxOutOfBounds => "Index out of bounds: The column index must be less than the number of columns in the matrix",
-                .InvalidRowSize => "Invalid row: The row must have as many elements as the number of columns in the matrix",
-                .InvalidColSize => "Invalid column: The column must have as many elements as the number of rows in the matrix",
-                .ResizeFailed => "Resize failed: The matrix could not be resized successfully",
-                .InvalidDimensions => "Invalid dimensions: The two matricies must have the same number of rows and columns",
-                .InvalidMulDimensions => "Invalid dimensions: The number of rows in the `other` matrix must equal the number of columns in `self`",
-                .InitFailed => "Failed to allocate space for the matrix",
+                Error.InvalidSize => return "Invalid size: The matrix must have at least one row and column",
+                Error.InvalidSlice => return "Invalid slice: The slice must have `nrows * ncols` elements to create a valid matrix",
+                Error.RowIdxOutOfBounds => return "Index out of bounds: The row index must be less than the number of rows in the matrix",
+                Error.ColIdxOutOfBounds => return "Index out of bounds: The column index must be less than the number of columns in the matrix",
+                Error.InvalidRowSize => return "Invalid row: The row must have as many elements as the number of columns in the matrix",
+                Error.InvalidColSize => return "Invalid column: The column must have as many elements as the number of rows in the matrix",
+                Error.ResizeFailed => return "Resize failed: The matrix could not be resized successfully",
+                Error.InvalidDimensions => return "Invalid dimensions: The two matricies must have the same number of rows and columns",
+                Error.InvalidMulDimensions => return "Invalid dimensions: The number of rows in the `other` matrix must equal the number of columns in `self`",
+                Error.InitFailed => return "Failed to allocate space for the matrix",
             }
         }
 
@@ -570,7 +568,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             var out = Self.initWithCapacity(self._nrows, other._ncols) catch @panic(errToStr(Error.InitFailed));
             for (0..self._nrows) |i| {
                 for (0..other._ncols) |j| {
-                    var sum = 0;
+                    var sum: T = 0;
                     for (0..self._ncols) |k| {
                         sum += self._data[self.arrayIdx(i, k)] * other._data[other.arrayIdx(k, j)];
                     }
@@ -605,18 +603,30 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return out;
         }
 
+        /// Returns a new matrix containing the result of left matrix division of `self` by `other`.
+        ///
+        /// # Note
+        /// The type `T` must be a numerical type (i.e int or float).
         pub fn leftDiv(self: *const Self, other: *const Self) Self {
             _ = other; // autofix
             _ = self; // autofix
             todo;
         }
 
+        /// Returns a new matrix containing the result of right matrix division of `self` by `other`.
+        ///
+        /// # Note
+        /// The type `T` must be a numerical type (i.e int or float).
         pub fn rightDiv(self: *const Self, other: *const Self) Self {
             _ = other; // autofix
             _ = self; // autofix
             todo;
         }
 
+        /// Returns a new matrix containing the result of element-wise division of `self` by `other`.
+        ///
+        /// # Note
+        /// The type `T` must be a numerical type (i.e int or float).
         pub fn divElems(self: *const Self, other: *const Self) Self {
             _ = other; // autofix
             _ = self; // autofix
@@ -628,19 +638,46 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             todo;
         }
 
+        /// Returns a new matrix containing the transpose of `self`.
         pub fn transpose(self: *const Self) Self {
-            _ = self; // autofix
-            todo;
+            var out = Self.initWithCapacity(self._nrows, self._ncols) catch @panic(errToStr(Error.InitFailed));
+            out._nrows = self._ncols;
+            out._ncols = self._nrows;
+
+            for (0..self._nrows) |i| {
+                for (0..self._ncols) |j| {
+                    out._data[out.arrayIdx(j, i)] = self._data[self.arrayIdx(i, j)];
+                }
+            }
+
+            return out;
         }
 
-        pub fn norm(self: *const Self) Self {
-            _ = self; // autofix
-            todo;
+        /// Calculates the Euclidean norm of the matrix.
+        pub fn norm(self: *const Self) f32 {
+            // Input validation
+            {
+                comptime if (isNumber(T) == false) {
+                    @compileError("Invalid type: The matricies must contain a numerical type (int or float)");
+                };
+            }
+            var out: f32 = 0;
+            for (0..self._nrows) |i| {
+                for (0..self._ncols) |j| {
+                    out += std.math.powi(f32, @floatCast(self.get(i, j)), 2) catch |err| {
+                        switch (err) {
+                            .Overflow => @panic("Overflow occured"),
+                            .Underflow => @panic("Underflow occured"),
+                        }
+                    };
+                }
+            }
+            return std.math.sqrt(out);
         }
 
+        /// Returns `true` if the matrix is square (equal number of rows and columns).
         pub fn isSquare(self: *const Self) bool {
-            _ = self; // autofix
-            todo;
+            return self._nrows == self._ncols;
         }
 
         pub fn isTriangularUpper(self: *const Self) bool {
@@ -900,4 +937,79 @@ test "Push rows and cols" {
     // var buf: [100]u8 = undefined;
     // const str = try mat.toString(&buf);
     // std.log.warn("mat: {s}", .{str});
+}
+
+test "Math" {
+    const allocator = testing.allocator;
+
+    const slice = [_]i8{ 1, 2, 3, 4, 5, 6 };
+    const mat = try Matrix(i8, allocator).initFromSlice(2, 3, &slice);
+    defer mat.deinit();
+
+    // Scale
+    {
+        const scaled = mat.scale(2);
+        defer scaled.deinit();
+        for (scaled.elements(), 0..) |value, i| {
+            try testing.expectEqual(slice[i] * 2, value);
+        }
+    }
+
+    // Add elems
+    {
+        const added_elems = mat.addElems(&mat);
+        defer added_elems.deinit();
+        for (added_elems.elements(), mat.elements()) |value, old_value| {
+            try testing.expectEqual(old_value * 2, value);
+        }
+    }
+
+    // Add scalar
+    {
+        const added_scalar = mat.addScalar(1);
+        defer added_scalar.deinit();
+        for (added_scalar.elements(), mat.elements()) |value, old_value| {
+            try testing.expectEqual(old_value + 1, value);
+        }
+    }
+
+    // Sub scalar
+    {
+        const sub_scalar = mat.subScalar(1);
+        defer sub_scalar.deinit();
+        for (sub_scalar.elements(), mat.elements()) |value, old_value| {
+            try testing.expectEqual(old_value - 1, value);
+        }
+    }
+
+    // Sub elems
+    {
+        const sub_elems = mat.subElems(&mat);
+        defer sub_elems.deinit();
+        for (sub_elems.elements()) |value| {
+            try testing.expectEqual(0, value);
+        }
+    }
+
+    // Mul
+    {
+        const transpose = mat.transpose();
+        defer transpose.deinit();
+        const mul = mat.mul(&transpose);
+        defer mul.deinit();
+        const result = [_]i8{ 14, 32, 32, 77 };
+        for (mul.elements(), 0..) |value, i| {
+            try testing.expectEqual(result[i], value);
+        }
+    }
+
+    // Mul elems
+    {
+        const mul_elems = mat.mulElems(&mat);
+        defer mul_elems.deinit();
+        const result = [_]i8{ 1, 4, 9, 16, 25, 36 };
+        for (mul_elems.elements(), 0..) |value, i| {
+            try testing.expectEqual(result[i], value);
+        }
+    }
 }

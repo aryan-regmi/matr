@@ -680,38 +680,47 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             return self._nrows == self._ncols;
         }
 
+        /// Returns `true` if the matrix is an upper triangular.
         pub fn isTriangularUpper(self: *const Self) bool {
             _ = self; // autofix
             todo;
         }
 
+        /// Returns `true` if the matrix is a lower triangular.
         pub fn isTriangularLower(self: *const Self) bool {
             _ = self; // autofix
             todo;
         }
 
+        /// Calculates the QR factorization/decomposition of `self` using Householder transformations.
         pub fn qr(self: *const Self) Self {
             _ = self; // autofix
             todo;
         }
 
+        /// Calculates the LU factorization/decomposition of `self`.
         pub fn lu(self: *const Self) Self {
             _ = self; // autofix
             todo;
         }
 
+        /// Returns the number of rows in the matrix.
         pub fn numRows(self: *const Self) usize {
             return self._nrows;
         }
 
+        /// Returns the number of columns in the matrix.
         pub fn numCols(self: *const Self) usize {
             return self._ncols;
         }
 
+        /// Returns an immutable slice of the elements in `self`.
         pub fn elements(self: *const Self) []const T {
             return self._data;
         }
 
+        // TODO: Replace tmp w/ bufPrint instead! (Don't create ArrayList)
+        //
         /// Returns a string representation of the matrix.
         pub fn toString(self: *const Self, buf: []u8) ![]u8 {
             var tmp = ArrayList(u8).init(allocator);

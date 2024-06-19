@@ -18,6 +18,15 @@ fn isNumber(comptime T: type) bool {
 //
 // TODO: Add in-place versions where possible
 
+/// Represents the range `[start, end)`.
+pub const Range = struct {
+    /// The start index of the range.
+    start: usize,
+
+    /// The end index of the range.
+    end: usize,
+};
+
 /// Represents a matrix of type `T`.
 ///
 /// # Note
@@ -633,6 +642,7 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
             todo;
         }
 
+        /// Returns a new matrix containing the inverse of `self`, if one exists.
         pub fn inverse(self: *const Self) Self {
             _ = self; // autofix
             todo;
@@ -673,6 +683,40 @@ pub fn Matrix(comptime T: type, allocator: Allocator) type {
                 }
             }
             return std.math.sqrt(out);
+        }
+
+        /// Returns a sub-matrix of `self`.
+        pub fn submatrix(self: *const Self, rows: Range, cols: Range) !Self {
+            _ = self; // autofix
+
+            const row_rev = rows.start > rows.end;
+            _ = row_rev; // autofix
+            const col_rev = cols.start > cols.end;
+            _ = col_rev; // autofix
+
+            todo;
+
+            // // Input validation
+            // if (row >= self._nrows) {
+            //     return Error.RowIdxOutOfBounds;
+            // }
+            //
+            // var out = try Self.initWithCapacity(1, self._ncols);
+            // out._nrows = 1;
+            // out._ncols = self._ncols;
+            //
+            // for (0..self._ncols) |col| {
+            //     if (clone_fn != null) {
+            //         const elem_ptr = try out.getPtr(0, col);
+            //         elem_ptr.* = clone_fn.?(try self.get(row, col));
+            //     } else {
+            //         const elem_ptr = try out.getPtr(0, col);
+            //         elem_ptr.* = try self.get(row, col);
+            //     }
+            // }
+            //
+            // return out;
+
         }
 
         /// Returns `true` if the matrix is square (equal number of rows and columns).

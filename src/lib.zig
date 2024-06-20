@@ -4,6 +4,8 @@ const ArrayList = std.ArrayList;
 const testing = std.testing;
 const mutt = @import("mutt");
 
+// TODO: Turn errors into panics?
+
 /// Checks if a type is a number.
 fn isNumber(comptime T: type) bool {
     switch (@typeInfo(T)) {
@@ -225,7 +227,64 @@ pub fn Matrix(comptime T: type) type {
             return @ptrCast(self.elems[self.arrayIdx(row, col)..]);
         }
 
-        // TODO: Create Row/Col iterators
+        // TODO: Add `nth()` func to mutt.iterator.Iterator
+        //  - To get specific values of the row w/out calling `next`
+
+        /// An iterator over a row of the matrix.
+        pub const Row = struct {
+            mat: *Self,
+            idx: usize,
+            col: usize = 0,
+
+            pub const ItemType = *T;
+            pub usingnamespace mutt.iterator.Iterator(Row, ItemType);
+
+            pub fn next(self: *Row) ?ItemType {
+                if (self.col < self.mat.ncols) {
+                    self.col += 1;
+                    return @ptrCast(self.mat.elems[self.mat.arrayIdx(self.idx, self.col - 1)..]);
+                }
+                return null;
+            }
+        };
+
+        /// An iterator over a column of the matrix.
+        pub const Col = struct {
+            mat: *Self,
+            idx: usize,
+            row: usize = 0,
+
+            pub const ItemType = *T;
+            pub usingnamespace mutt.iterator.Iterator(Col, ItemType);
+
+            pub fn next(self: *Col) ?ItemType {
+                if (self.row < self.mat.nrows) {
+                    self.row += 1;
+                    return @ptrCast(self.mat.elems[self.mat.arrayIdx(self.row - 1, self.idx)..]);
+                }
+                return null;
+            }
+        };
+
+        /// Returns an iterator over the elements of the specified row.
+        pub fn getRow(self: *Self, row: usize) !Row {
+            // Input validation
+            if (row >= self.nrows) {
+                return Error.RowIdxOutOfBounds;
+            }
+
+            return Row{ .mat = self, .idx = row };
+        }
+
+        /// Returns an iterator over the elements of the specified column.
+        pub fn getCol(self: *Self, col: usize) !Col {
+            // Input validation
+            if (col >= self.ncols) {
+                return Error.ColIdxOutOfBounds;
+            }
+
+            return Col{ .mat = self, .idx = col };
+        }
 
         //          Interfaces
         // ================================
@@ -333,4 +392,34 @@ test "identity" {
             }
         }
     }
+}
+
+test "getRow/Col" {
+    const slice = [_]u8{ 1, 2, 3, 4, 5, 6 };
+    var mat = try Matrix(u8).initFromSlice(testing.allocator, &slice, 2, 3);
+    defer mat.deinit();
+
+    var row0 = try mat.getRow(0);
+    var row0en = row0.enumerate();
+    while (row0en.next()) |v| {
+        try testing.expectEqual(slice[v.idx], v.val.*);
+    }
+
+    var row1 = try mat.getRow(1);
+    var row1en = row1.enumerate();
+    while (row1en.next()) |v| {
+        try testing.expectEqual(slice[v.idx + 3], v.val.*);
+    }
+
+    var col0 = try mat.getCol(0);
+    try testing.expectEqual(slice[0], col0.next().?.*);
+    try testing.expectEqual(slice[3], col0.next().?.*);
+
+    var col1 = try mat.getCol(1);
+    try testing.expectEqual(slice[1], col1.next().?.*);
+    try testing.expectEqual(slice[4], col1.next().?.*);
+
+    var col2 = try mat.getCol(2);
+    try testing.expectEqual(slice[2], col2.next().?.*);
+    try testing.expectEqual(slice[5], col2.next().?.*);
 }

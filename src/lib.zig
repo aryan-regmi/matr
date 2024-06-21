@@ -394,6 +394,18 @@ test "identity" {
     }
 }
 
+test "get[Ptr]" {
+    const slice = [_]u8{ 1, 2, 3, 4, 5, 6 };
+    var mat = try Matrix(u8).initFromSlice(testing.allocator, &slice, 2, 3);
+    defer mat.deinit();
+
+    try testing.expectEqual(slice[0], mat.get(0, 0));
+
+    const val = try mat.getPtr(0, 0);
+    val.* = 9;
+    try testing.expectEqual(9, mat.get(0, 0));
+}
+
 test "getRow/Col" {
     const slice = [_]u8{ 1, 2, 3, 4, 5, 6 };
     var mat = try Matrix(u8).initFromSlice(testing.allocator, &slice, 2, 3);
